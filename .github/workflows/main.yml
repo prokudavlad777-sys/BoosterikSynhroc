@@ -1,0 +1,47 @@
+name: Build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DBOOSTERIK_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/Boosterik | Out-Null
+          Copy-Item build/Release/Boosterik.exe dist/Boosterik/
+          Copy-Item -Recurse assets dist/Boosterik/assets
+          Copy-Item -Recurse custom dist/Boosterik/custom
+          New-Item -ItemType Directory -Force dist/Boosterik/configs | Out-Null
+          Copy-Item README.md,LICENSE dist/Boosterik/
+          Compress-Archive -Path dist/Boosterik -DestinationPath Boosterik-win64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Boosterik-win64
+          path: Boosterik-win64.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Boosterik-win64.zip
